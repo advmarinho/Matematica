@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Multiplicador – Método Interativo (Igarapé Digital)</title>
+
+<style>
+  :root { --blue-1:#007bff; --blue-2:#00b1e0; --orange:#ff6b00; --grey-bg:#f5f5f5; --grey-txt:#555; }
+  * { box-sizing: border-box; margin:0; padding:0; }
+  body { font-family:'Roboto',sans-serif; background:#fff; color:#333; min-height:100vh; display:flex; flex-direction:column; }
+  header { background:linear-gradient(135deg,var(--blue-1) 0%,var(--blue-2)100%); color:#fff; text-align:center; padding:44px 20px 56px; }
+  header h1 { font-size:2.4rem; font-weight:800; }
+  .container { flex:1; display:flex; flex-wrap:wrap; padding:24px 20px 36px; gap:30px; justify-content:center; }
+  .main { flex:1 1 760px; max-width:1060px; text-align:center; }
+  .board { background:var(--grey-bg); border:2px solid var(--blue-1); border-radius:12px; padding:18px; box-shadow:0 6px 14px rgba(0,0,0,0.08); }
+  .controls { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; align-items:center; }
+  input[type="number"] { padding:12px; font-size:1.1rem; border:2px solid var(--blue-1); border-radius:8px; width:140px; text-align:center; }
+  select { padding:12px; font-size:1rem; border:2px solid var(--blue-1); border-radius:8px; }
+  .btn { padding:10px 16px; font-size:1rem; font-weight:600; border:none; border-radius:8px; cursor:pointer; transition:.15s; }
+  .btn-primary { background:var(--blue-1); color:#fff; }
+  .btn-primary:hover { background:var(--blue-2); }
+  .btn-outline { background:#fff; color:var(--blue-1); border:2px solid var(--blue-1); }
+  .btn-orange { background:var(--orange); color:#fff; }
+  .subcontrols { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; align-items:center; margin:12px 0 6px; }
+  .hint { display:inline-block; padding:6px 10px; border-radius:999px; background:#fff; border:1px solid var(--blue-1); color:var(--blue-1); font-size:.9rem; }
+  #resultado { margin:10px 0 8px; font-size:1.35rem; font-weight:800; color:var(--orange); }
+  .chalk-wrap { border:2px solid var(--blue-1); border-radius:10px; padding:10px; }
+  .chalk-area { width:100%; height:clamp(360px,60vh,720px); border:2px solid var(--blue-1); border-radius:8px; background:#fff; position:relative; overflow:hidden; }
+  canvas#chalk { width:100%; height:100%; display:block; }
+  .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center; margin:8px 0 10px; }
+  .range { appearance:none; height:8px; background:#e9f2ff; border-radius:6px; outline:none; border:1px solid #bcd3ff; width:220px; }
+  .range::-webkit-slider-thumb { appearance:none; width:18px; height:18px; border-radius:50%; background:var(--blue-1); cursor:pointer; border:2px solid #fff; box-shadow:0 0 0 2px var(--blue-1); }
+  .product-line { margin-top:10px; display:flex; justify-content:center; gap:6px; }
+  .digit-box { min-width:28px; padding:8px 10px; border:2px solid #cfd8ff; background:#f7f9ff; border-radius:6px; color:#2c3e50; font-weight:800; font-size:1.15rem; font-variant-numeric: tabular-nums; }
+  footer { text-align:center; padding:16px 10px; font-size:.9rem; color:var(--blue-1); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Multiplicador – Método Interativo</h1>
+</header>
+
+<div class="container">
+  <div class="main">
+    <div class="board">
+      <div class="controls">
+        <input type="number" id="num1" value="21" placeholder="Número 1">
+        <span style="font-weight:800">×</span>
+        <input type="number" id="num2" value="13" placeholder="Número 2">
+        <select id="metodo">
+          <option value="chines" selected>Chinês / Indiano (linhas)</option>
+          <option value="normal">Tradicional</option>
+        </select>
+        <button class="btn btn-primary" id="btnCalcular">Calcular</button>
+      </div>
+
+      <div class="subcontrols" id="toolRow">
+        <button class="btn btn-orange" id="btnStep">Modo Passo-a-passo: ligado</button>
+        <button class="btn btn-outline" id="btnAuto">Auto (todas diagonais)</button>
+        <button class="btn btn-outline" id="btnUndo">Desfazer diagonal</button>
+        <button class="btn btn-outline" id="btnClear">Limpar</button>
+        <span class="hint" id="hintText">Arraste as bolinhas da diagonal destacada</span>
+      </div>
+
+      <div class="row">
+        <span class="hint">Tamanho da bolinha</span>
+        <input type="range" id="dotSize" class="range" min="3" max="12" step="0.2" value="6.0">
+        <span class="hint" id="dotSizeVal">6.0</span>
+      </div>
+
+      <div id="resultado"></div>
+
+      <div class="chalk-wrap">
+        <div class="chalk-area"><canvas id="chalk"></canvas></div>
+      </div>
+
+      <div class="product-line" id="productLine" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<footer>© 2025 Igarapé Digital</footer>
+
+<script>
+/* ===== Canvas responsivo ===== */
+const canvas = document.getElementById('chalk');
+const ctx = canvas.getContext('2d');
+function fitCanvasToParent() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(rect.width * dpr);
+  canvas.height = Math.floor(rect.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+/* ===== Estado ===== */
+let verticalLines = [];    // {x, group}
+let horizontalLines = [];  // {y, group}
+let dots = [];             // {x,y,gDiag,selected}
+let gDiagTotals = [];      // totais por diagonal de GRUPO (contagem de pontos)
+let gDiagSelected = [];    // selecionados por diagonal (para passo-a-passo)
+let resultDigitsRTL = [];  // dígitos já firmados (direita->esquerda)
+let carry = 0;
+let activeGDiag = 0;
+let stepMode = true;       // passo-a-passo ON/OFF
+let currentN1 = "21";
+let currentN2 = "13";
+let vGroupsCount = 0;
+let hGroupsCount = 0;
+
+/* ===== Estilo ===== */
+const COLORS = {
+  vLine: "#007bff", hLine: "#00b1e0", dot: "#ff6b00", dotSelected: "#cc5200",
+  grid: "#e4f2ff", diag: "rgba(0,0,0,0.10)", diagActive: "rgba(255,107,0,0.22)"
+};
+const GEOM = { s: 14, gap: 22, padding: 40, dotR: 6 };
+
+/* ===== Construção do layout por GRUPOS (casas) ===== */
+function buildLines(n1Str, n2Str) {
+  verticalLines = []; horizontalLines = []; dots = [];
+  gDiagTotals = []; gDiagSelected = []; resultDigitsRTL = [];
+  carry = 0; activeGDiag = 0;
+
+  const dig1 = [...(n1Str.trim()||"0")].map(d => Math.max(0, Math.min(9, parseInt(d||"0", 10))));
+  const dig2 = [...(n2Str.trim()||"0")].map(d => Math.max(0, Math.min(9, parseInt(d||"0", 10))));
+  vGroupsCount = dig1.length; hGroupsCount = dig2.length;
+
+  const totalV = dig1.reduce((acc,d)=> acc + d, 0);
+  const totalH = dig2.reduce((acc,d)=> acc + d, 0);
+
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  const pad = GEOM.padding;
+  const usableW = Math.max(140, W - 2*pad);
+  const usableH = Math.max(140, H - 2*pad);
+  const s = Math.max(10, Math.min(26, Math.min(
+    usableW / (totalV + dig1.length + 1),
+    usableH / (totalH + dig2.length + 1)
+  )));
+  const gap = Math.max(18, Math.min(36, s + 8));
+
+  // linhas V (da esquerda p/ direita), preservando grupo
+  let x = pad + s;
+  for (let g=0; g<dig1.length; g++){
+    for (let i=0;i<dig1[g];i++){ verticalLines.push({x, group:g}); x += s; }
+    x += gap;
+  }
+  // linhas H (de cima p/ baixo), preservando grupo
+  let y = pad + s;
+  for (let g=0; g<dig2.length; g++){
+    for (let i=0;i<dig2[g];i++){ horizontalLines.push({y, group:g}); y += s; }
+    y += gap;
+  }
+
+  // gera pontos e atribui DIAGONAL DE GRUPO:
+  // gDiag = (grupo vertical contado da direita) + (grupo horizontal contado de baixo)
+  for (let vi=0; vi<verticalLines.length; vi++){
+    for (let hi=0; hi<horizontalLines.length; hi++){
+      const vGroup = verticalLines[vi].group;
+      const hGroup = horizontalLines[hi].group;
+      const gDiag = (vGroupsCount - 1 - vGroup) + (hGroupsCount - 1 - hGroup);
+      dots.push({ x:verticalLines[vi].x, y:horizontalLines[hi].y, gDiag, selected:false });
+    }
+  }
+
+  const nGDiag = vGroupsCount + hGroupsCount - 1;
+  gDiagTotals = new Array(nGDiag).fill(0);
+  gDiagSelected = new Array(nGDiag).fill(0);
+  dots.forEach(d => gDiagTotals[d.gDiag]++);  // cada ponto soma 1 na diagonal do grupo
+
+  drawBoard(true);
+  refreshHint();
+  updateProductLineBoxes(); // limpa faixa
+}
+
+/* ===== Desenho ===== */
+function drawBoard(showDiagonals=false) {
+  ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
+
+  // grade
+  ctx.strokeStyle = COLORS.grid; ctx.lineWidth = 1;
+  const step = 16;
+  for (let gx=0; gx<canvas.clientWidth; gx+=step) { ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,canvas.clientHeight); ctx.stroke(); }
+  for (let gy=0; gy<canvas.clientHeight; gy+=step) { ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(canvas.clientWidth,gy); ctx.stroke(); }
+
+  // diagonais de grupo (faixas)
+  if (showDiagonals) {
+    const n = gDiagTotals.length;
+    for (let k=0; k<n; k++){
+      const {p1, p2} = groupDiagonalEndpoints(k);
+      ctx.strokeStyle = (stepMode && k===activeGDiag) ? COLORS.diagActive : COLORS.diag;
+      ctx.lineWidth = (stepMode && k===activeGDiag) ? 6 : 4;
+      ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    }
+  }
+
+  // horizontais
+  ctx.strokeStyle = COLORS.hLine; ctx.lineWidth = 2;
+  horizontalLines.forEach(l => { ctx.beginPath(); ctx.moveTo(GEOM.padding*0.6, l.y); ctx.lineTo(canvas.clientWidth-GEOM.padding*0.6, l.y); ctx.stroke(); });
+
+  // verticais
+  ctx.strokeStyle = COLORS.vLine;
+  verticalLines.forEach(l => { ctx.beginPath(); ctx.moveTo(l.x, GEOM.padding*0.6); ctx.lineTo(l.x, canvas.clientHeight-GEOM.padding*0.6); ctx.stroke(); });
+
+  // bolinhas
+  dots.forEach(d => { ctx.beginPath(); ctx.arc(d.x, d.y, GEOM.dotR, 0, Math.PI*2); ctx.fillStyle = d.selected ? COLORS.dotSelected : COLORS.dot; ctx.fill(); });
+}
+
+/* extremos da diagonal de grupo k */
+function groupDiagonalEndpoints(k){
+  const pts = dots.filter(d => d.gDiag===k);
+  let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+  pts.forEach(p=>{ if(p.x<minX)minX=p.x; if(p.x>maxX)maxX=p.x; if(p.y<minY)minY=p.y; if(p.y>maxY)maxY=p.y; });
+  const ext = 24;
+  return { p1:{ x:minX-ext, y:maxY+ext }, p2:{ x:maxX+ext, y:minY-ext } };
+}
+
+/* ===== Interação: arrastar para acender ===== */
+let dragging=false;
+canvas.addEventListener('mousedown', e=>{ dragging=true; lightNear(e); });
+canvas.addEventListener('mousemove', e=>{ if(dragging) lightNear(e); });
+['mouseup','mouseleave'].forEach(evt => canvas.addEventListener(evt, ()=> dragging=false));
+
+function mousePos(ev){ const r=canvas.getBoundingClientRect(); return {x:ev.clientX-r.left, y:ev.clientY-r.top}; }
+
+function lightNear(ev){
+  const {x,y}=mousePos(ev);
+  const R = Math.max(12, GEOM.dotR*2.6);
+  let changed=false;
+
+  if (stepMode) {
+    dots.forEach(d => {
+      if (d.gDiag!==activeGDiag || d.selected) return;
+      const dx=d.x-x, dy=d.y-y;
+      if (dx*dx+dy*dy<=R*R){ d.selected=true; gDiagSelected[activeGDiag]++; changed=true; }
+    });
+    if (changed) {
+      drawBoard(true);
+      if (gDiagSelected[activeGDiag] === gDiagTotals[activeGDiag]) finalizeCurrentGDiag();
+    }
+  } else {
+    dots.forEach(d => {
+      if (d.selected) return;
+      const dx=d.x-x, dy=d.y-y;
+      if (dx*dx+dy*dy<=R*R){ d.selected=true; gDiagSelected[d.gDiag]++; changed=true; }
+    });
+    if (changed) { drawBoard(true); updateProductLineLive(); }
+  }
+}
+
+/* ===== Passo-a-passo: finalizar a diagonal de grupo ativa ===== */
+function finalizeCurrentGDiag(){
+  const val = gDiagSelected[activeGDiag] + carry;
+  const digit = val % 10;
+  carry = Math.floor(val / 10);
+  resultDigitsRTL[activeGDiag] = digit;
+  updateProductLineBoxes();
+  activeGDiag++;
+  if (activeGDiag >= gDiagTotals.length) {
+    if (carry > 0) { resultDigitsRTL.push(carry); carry = 0; updateProductLineBoxes(); }
+    refreshHint(true);
+  } else { refreshHint(); }
+  drawBoard(true);
+}
+
+/* ===== Linha de produto (dígitos firmados) ===== */
+function updateProductLineBoxes(){
+  const wrap = document.getElementById('productLine');
+  wrap.style.display='flex'; wrap.innerHTML='';
+  const done = [...resultDigitsRTL].reverse(); // esquerda->direita
+  done.forEach(d => { const box=document.createElement('div'); box.className='digit-box'; box.textContent=d; wrap.appendChild(box); });
+  const remaining = Math.max(0, gDiagTotals.length - resultDigitsRTL.length);
+  for (let i=0;i<remaining;i++){ const ph=document.createElement('div'); ph.className='digit-box'; ph.style.opacity=.35; ph.textContent='·'; wrap.appendChild(ph); }
+}
+
+/* ===== Modo livre: conta em tempo real por DIAGONAIS DE GRUPO ===== */
+function updateProductLineLive(){
+  const sums = new Array(gDiagTotals.length).fill(0);
+  dots.forEach(d => { if (d.selected) sums[d.gDiag]++; });
+  let c=0, digitsRTL=[];
+  for (let i=0;i<sums.length;i++){ const t=sums[i]+c; digitsRTL.push(t%10); c=Math.floor(t/10); }
+  if (c>0) digitsRTL.push(c);
+  const wrap=document.getElementById('productLine');
+  wrap.style.display='flex'; wrap.innerHTML='';
+  [...digitsRTL].reverse().forEach(d=>{ const box=document.createElement('div'); box.className='digit-box'; box.textContent=d; wrap.appendChild(box); });
+}
+
+/* ===== UI util ===== */
+function refreshHint(finished=false){
+  const hint = document.getElementById('hintText');
+  if (!stepMode) { hint.textContent = "Modo livre: arraste em qualquer diagonal"; return; }
+  if (finished) { hint.textContent = "Concluído. Use 'Limpar' para recomeçar ou altere os números."; return; }
+  const need = gDiagTotals[activeGDiag], got = gDiagSelected[activeGDiag];
+  hint.textContent = `Diagonal D${activeGDiag}: selecione ${need} bolinhas (faltam ${Math.max(0,need-got)}).`;
+}
+
+/* ===== Botões ===== */
+document.getElementById('btnCalcular').addEventListener('click', recalc);
+document.getElementById('btnAuto').addEventListener('click', () => {
+  dots.forEach(d => d.selected = true);
+  gDiagSelected = [...gDiagTotals];
+  drawBoard(true);
+  let c=0; resultDigitsRTL=[];
+  for (let i=0;i<gDiagTotals.length;i++){ const t=gDiagTotals[i]+c; resultDigitsRTL[i]=t%10; c=Math.floor(t/10); }
+  if (c>0) resultDigitsRTL.push(c);
+  activeGDiag = gDiagTotals.length; carry = 0;
+  updateProductLineBoxes(); refreshHint(true);
+});
+document.getElementById('btnClear').addEventListener('click', () => { recalc(); });
+document.getElementById('btnUndo').addEventListener('click', () => {
+  if (!stepMode) return;
+  if (activeGDiag===0 && resultDigitsRTL.length===0) return;
+  activeGDiag = Math.max(0, activeGDiag-1);
+  dots.forEach(d => { if (d.gDiag===activeGDiag) d.selected=false; });
+  gDiagSelected[activeGDiag]=0;
+  carry=0; resultDigitsRTL=[];
+  for (let i=0;i<activeGDiag;i++){ const t=gDiagSelected[i]+carry; resultDigitsRTL[i]=t%10; carry=Math.floor(t/10); }
+  drawBoard(true); updateProductLineBoxes(); refreshHint();
+});
+document.getElementById('btnStep').addEventListener('click', () => {
+  stepMode = !stepMode;
+  document.getElementById('btnStep').textContent = stepMode ? 'Modo Passo-a-passo: ligado' : 'Modo Passo-a-passo: desligado';
+  refreshHint();
+  if (!stepMode) updateProductLineLive();
+});
+document.getElementById('dotSize').addEventListener('input', (e)=>{
+  GEOM.dotR = parseFloat(e.target.value);
+  document.getElementById('dotSizeVal').textContent = GEOM.dotR.toFixed(1);
+  drawBoard(true);
+});
+
+/* ===== Fluxo principal ===== */
+function recalc(){
+  const metodo = document.getElementById('metodo').value;
+  const n1 = (document.getElementById('num1').value || "0").trim();
+  const n2 = (document.getElementById('num2').value || "0").trim();
+  if (metodo==='normal'){
+    document.getElementById('toolRow').style.display='none';
+    document.getElementById('resultado').textContent = `${parseInt(n1||"0",10)} × ${parseInt(n2||"0",10)} = ${parseInt(n1||"0",10)*parseInt(n2||"0",10)}`;
+    ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
+    document.getElementById('productLine').style.display='none';
+    return;
+  }
+  document.getElementById('toolRow').style.display='flex';
+  document.getElementById('resultado').textContent = `${parseInt(n1||"0",10)} × ${parseInt(n2||"0",10)} = ${parseInt(n1||"0",10)*parseInt(n2||"0",10)}`;
+  buildLines(n1, n2);
+  document.getElementById('productLine').style.display='flex';
+}
+
+window.addEventListener('resize', () => { fitCanvasToParent(); recalc(); });
+
+/* ===== Init ===== */
+fitCanvasToParent();
+recalc();
+</script>
+</body>
+</html>
